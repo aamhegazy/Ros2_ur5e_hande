@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/humble/include/**",
+        "/home/hgz/ur5e_ws/src/Universal_Robots_Client_Library/include/**",
+        "/home/hgz/ur5e_ws/src/Universal_Robots_ROS2_Driver/ur_calibration/include/**",
+        "/home/hgz/ur5e_ws/src/Universal_Robots_ROS2_Driver/ur_controllers/include/**",
+        "/home/hgz/ur5e_ws/src/Universal_Robots_ROS2_Driver/ur_robot_driver/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ros2",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++17"
+    }
+  ],
+  "version": 4
+}

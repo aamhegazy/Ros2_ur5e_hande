@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur5e_hande">
+    
+    <xacro:arg name="ur_ip" default="192.168.1.10" />
+    <xacro:arg name="reverse_ip" default="192.168.1.11" />
+    <xacro:arg name="use_fake_hardware" default="false" />
+    <xacro:arg name="sim_gazebo" default="false" />
+    <xacro:arg name="sim_ignition" default="false" />
+    <xacro:arg name="initial_positions_file" 
+               default="$(find moveit_config)/config/initial_positions.yaml" />
+
+    <!-- Arm links/joints + arm ros2_control hardware (ur5e) -->
+    <!-- Gripper links/joints ONLY (generate_ros2_control_tag=false) -->
+    <xacro:include filename="$(find ur5e_hande_description)/urdf/ur5e_hande.urdf.xacro" />
+
+    <!-- Gripper hardware interface (HandE) - added separately since description skips it -->
+    <xacro:unless value="$(arg use_fake_hardware)">
+        <xacro:include filename="$(find robotiq_hande_description)/urdf/robotiq_hande_gripper.ros2_control.xacro" />
+        <xacro:robotiq_hande_ros2_control
+            name="HandE"
+            prefix=""
+            grip_pos_min="0.0"
+            grip_pos_max="0.025"
+            baudrate="115200"
+            parity="N"
+            data_bits="8"
+            stop_bit="1"
+            slave_id="9"
+            frequency_hz="50"
+            create_socat_tty="true"
+            socat_ip_address="$(arg ur_ip)"
+            socat_port="54321"
+            tty_port="/tmp/ttyUR"
+            use_fake_hardware="false"
+        />
+    </xacro:unless>
+
+    <!-- Fake hardware: replace both arm AND gripper with mock system -->
+    <xacro:if value="$(arg use_fake_hardware)">
+        <xacro:include filename="ur5e_hande.ros2_control.xacro" />
+        <xacro:ur5e_hande_ros2_control 
+            name="FakeSystem" 
+            initial_positions_file="$(arg initial_positions_file)"/>
+    </xacro:if>
+
+</robot>
