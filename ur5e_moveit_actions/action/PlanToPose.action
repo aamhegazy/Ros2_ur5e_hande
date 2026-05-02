@@ -1,0 +1,17 @@
+# Action Msgs for Motion Planning 
+# Goal
+geometry_msgs/PoseStamped target_pose #must be in the base link(or header.frame_id)
+float64 planning_time                # Seconds; 0 = use default (5.0)
+float64 velocity_scaling 
+float64 acceleration_scaling
+string planning_id                   # tell moveit which planner algorith to use (ex. RRTConnect)
+---
+# Result
+bool success                                # message to human 
+string message                              # token to pass to ExecutePlan
+string plan_id                              # token to pass to the execute plan
+geometry_msgs/Point[] tcp_waypoints          # tcp position along the path to preview 
+float64 plan_duration                       # expected motion time in seconds 
+---
+# Feedback
+string state     # "planning" | "Found" | "failed"

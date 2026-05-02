@@ -1,0 +1,15 @@
+{
+    "ROS2.distro": "humble",
+    "python.autoComplete.extraPaths": [
+        "/home/hegzo/ur5e_hande_ws/install/ros_tcp_endpoint/lib/python3.10/site-packages",
+        "/home/hegzo/ur5e_hande_ws/install/ur5e_moveit_actions/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/hegzo/ur5e_hande_ws/install/ros_tcp_endpoint/lib/python3.10/site-packages",
+        "/home/hegzo/ur5e_hande_ws/install/ur5e_moveit_actions/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

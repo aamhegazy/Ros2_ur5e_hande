@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur5e_hande">
+    
+    <xacro:arg name="ur_ip" default="192.168.0.10" />
+    <xacro:arg name="reverse_ip" default="192.168.0.11" />
+    <xacro:arg name="use_fake_hardware" default="true" />
+    <xacro:arg name="sim_gazebo" default="false" />
+    <xacro:arg name="sim_ignition" default="false" />
+    <xacro:arg name="initial_positions_file" 
+               default="$(find ur5e_hande_description)/config/initial_positions.yaml" />
+
+    <xacro:include filename="$(find ur5e_hande_description)/urdf/ur5e_hande.urdf.xacro">
+        <xacro:arg name="use_fake_hardware" value="$(arg use_fake_hardware)"/>
+        <xacro:arg name="sim_gazebo" value="$(arg sim_gazebo)"/>
+        <xacro:arg name="sim_ignition" value="$(arg sim_ignition)"/>
+        <xacro:arg name="robot_ip" value="$(arg ur_ip)"/>
+        <xacro:arg name="reverse_ip" value="$(arg reverse_ip)"/>
+    </xacro:include>
+
+    <!-- Fake hardware: ros2_control system using mock_components -->
+    <xacro:if value="$(arg use_fake_hardware)">
+        <xacro:include filename="ur5e_hande.ros2_control.xacro" />
+        <xacro:ur5e_hande_ros2_control 
+            name="FakeSystem" 
+            initial_positions_file="$(arg initial_positions_file)"/>
+    </xacro:if>
+
+    <!-- Real hardware: HandE gripper interface -->
+    <xacro:unless value="$(arg use_fake_hardware)">
+        <xacro:include filename="$(find ur5e_hande_description)/urdf/hand_e.ros2_control.xacro" />
+        <xacro:robotiq_hande_ros2_control
+            name="HandE"
+            prefix=""
+            grip_pos_min="0.0"
+            grip_pos_max="0.025"
+            baudrate="115200"
+            parity="N"
+            data_bits="8"
+            stop_bit="1"
+            slave_id="9"
+            frequency_hz="50"
+            create_socat_tty="true"
+            socat_ip_address="$(arg ur_ip)"
+            socat_port="54321"
+            tty_port="/tmp/ttyUR"
+            use_fake_hardware="false"
+        />
+    </xacro:unless>
+
+</robot>

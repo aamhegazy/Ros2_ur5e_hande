@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur">
+    
+    <xacro:arg name="initial_positions_file" default="$(find moveit_config)/config/initial_positions.yaml" />
+    <xacro:arg name="use_fake_hardware" default="true" />
+    <xacro:arg name="sim_gazebo" default="false" />
+
+    <xacro:include filename="$(find ur5e_hande_description)/urdf/ur5e_hande.urdf.xacro" />
+
+    <xacro:include filename="ur5e_hande.ros2_control.xacro" />
+    <xacro:ur5e_hande_ros2_control 
+        name="FakeSystem" 
+        initial_positions_file="$(arg initial_positions_file)"/>
+
+</robot>
