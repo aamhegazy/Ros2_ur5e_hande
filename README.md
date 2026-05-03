@@ -523,3 +523,31 @@ The default v0.7.0 does not support action message types. A patch was applied to
 | `plan_to_pose/result` | Ubuntu → Pi → Unity | `ur5e_moveit_actions/action/PlanToPose_Result` |
 | `execute_plan/goal` | Unity → Pi → Ubuntu | `ur5e_moveit_actions/action/ExecutePlan_Goal` |
 | `execute_plan/result` | Ubuntu → Pi → Unity | `ur5e_moveit_actions/action/ExecutePlan_Result` |
+
+### 7. Custom RealSense ROS 2 Publisher (realsense_publisher.py)
+
+Due to a known incompatibility between `realsense-ros` and the Pi 4 (UVC extension unit `xioctl` timeouts on control 1), the standard `rs_launch.py` fails to start the device. The workaround is `realsense_publisher.py` — a Python node that uses `pyrealsense2` directly and publishes to ROS 2 topics manually.
+
+**Topics published:**
+| Topic | Type |
+|---|---|
+| `/camera/color/image_raw` | `sensor_msgs/Image` |
+| `/camera/depth/image_rect_raw` | `sensor_msgs/Image` |
+
+**Run:**
+```bash
+source /opt/ros/humble/setup.bash
+python3 ~/ur5e_hande_ws/src/Ros2_ur5e_hande/realsense_publisher.py
+```
+
+**View stream in browser (no display needed):**
+```bash
+# Terminal 2
+ros2 run web_video_server web_video_server
+```
+Then open: `http://172.20.10.2:8080/stream?topic=/camera/color/image_raw`
+
+**Notes:**
+- Requires `numpy<2` — ROS 2 cv_bridge is incompatible with numpy 2.x
+- Camera must be on USB 3.0 port (blue) — USB 2.x causes bandwidth issues
+- `pyrealsense2` must be installed system-wide: `sudo pip3 install pyrealsense2 "numpy<2"`
