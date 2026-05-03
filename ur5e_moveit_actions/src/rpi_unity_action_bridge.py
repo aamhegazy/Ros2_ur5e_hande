@@ -12,7 +12,7 @@
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node 
-from ur5e_moveit_actions.action import PlanToPose, ExecutePlan 
+from ur5e_moveit_actions_msgs.action import PlanToPose, ExecutePlan 
 
 class UnityActionBridge(Node):
     def __init__(self):

@@ -551,3 +551,72 @@ Then open: `http://172.20.10.2:8080/stream?topic=/camera/color/image_raw`
 - Requires `numpy<2` — ROS 2 cv_bridge is incompatible with numpy 2.x
 - Camera must be on USB 3.0 port (blue) — USB 2.x causes bandwidth issues
 - `pyrealsense2` must be installed system-wide: `sudo pip3 install pyrealsense2 "numpy<2"`
+
+---
+
+## 9. Raspberry Pi 4 — Unity↔ROS2 Action Bridge (raspberry-pi branch)
+
+This section covers testing the full Unity↔ROS2 action pipeline using the Pi as a standalone development environment without the Ubuntu PC or real hardware.
+
+### Pi-specific packages
+
+| Package | Purpose |
+|---|---|
+| `ur5e_moveit_actions_msgs` | Action message definitions only (no MoveIt dependency) |
+| `ros_tcp_endpoint` (main-ros2 branch) | Unity TCP bridge |
+
+### Pi-specific scripts (prefixed `rpi_`)
+
+| Script | Purpose |
+|---|---|
+| `ur5e_moveit_actions/src/rpi_unity_action_bridge.py` | Bridges Unity topics to ROS 2 actions |
+| `ur5e_moveit_actions/src/rpi_fake_action_server.py` | Fake action server for testing without MoveIt |
+| `rpi_realsense_publisher.py` | RealSense camera publisher (pyrealsense2 direct) |
+
+### Why separate `ur5e_moveit_actions_msgs`?
+
+The main `ur5e_moveit_actions` package requires MoveIt (`moveit_ros_planning_interface`) which cannot be installed on the Pi. `ur5e_moveit_actions_msgs` contains only the action definitions and builds cleanly on the Pi.
+
+### Running the test stack on Pi
+
+**Terminal 1 — Fake action server:**
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ur5e_hande_ws/install/setup.bash
+python3 ~/ur5e_hande_ws/src/Ros2_ur5e_hande/ur5e_moveit_actions/src/rpi_fake_action_server.py
+```
+
+**Terminal 2 — Unity action bridge:**
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ur5e_hande_ws/install/setup.bash
+python3 ~/ur5e_hande_ws/src/Ros2_ur5e_hande/ur5e_moveit_actions/src/rpi_unity_action_bridge.py
+```
+
+**Terminal 3 — TCP endpoint:**
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ur5e_hande_ws/install/setup.bash
+ros2 run ros_tcp_endpoint default_server_endpoint \
+  --ros-args -p ROS_IP:=172.20.10.2 -p ROS_TCP_PORT:=10000
+```
+
+**Verify topics:**
+```bash
+ros2 topic list
+# Expected:
+# /execute_plan/goal
+# /execute_plan/result
+# /plan_to_pose/goal
+# /plan_to_pose/result
+```
+
+### Unity settings
+- ROS IP: `172.20.10.2`
+- Port: `10000`
+- Protocol: `ROS2`
+
+### Notes
+- `rpi_fake_action_server.py` returns dummy success results for both `PlanToPose` and `ExecutePlan`
+- Replace with real `moveit_action_server` on Ubuntu PC for production
+- `ur5e_moveit_actions_msgs` must be used in Pi scripts instead of `ur5e_moveit_actions`

@@ -1,0 +1,11 @@
+#Action message for Exectution 
+# Goal
+string plan_id # from planToPose result
+---
+# Result
+bool success
+string message
+geometry_msgs/PoseStamped final_pose # where TCP ends up
+---
+# Feedback 
+float32 progress # 0.0 -> 1.0
