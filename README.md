@@ -395,3 +395,131 @@ src/
 - Universal Robots ROS 2 Driver — Universal Robots A/S & PickNik Robotics
 
 Each package retains its original license. See individual `LICENSE` files.
+
+---
+
+## 8. Raspberry Pi 4 — RealSense Bridge (raspberry-pi branch)
+
+The `raspberry-pi` branch adds a Raspberry Pi 4 as a lightweight ROS 2 bridge between Unity and the main Ubuntu PC planning stack. The Pi runs the ROS-TCP-Endpoint (Unity TCP bridge) and the Intel RealSense D435i camera node.
+
+### Network layout
+
+| Device | IP | Role |
+|---|---|---|
+| Mobile Hotspot | `172.20.10.1` | Gateway |
+| Ubuntu PC | `172.20.10.4` | Full ROS 2 planning stack |
+| Raspberry Pi 4 | `172.20.10.2` | Unity TCP bridge + RealSense |
+| Windows PC (Unity) | `172.20.10.6` | XR frontend |
+
+SSH into the Pi:
+```bash
+ssh hgz-rpi4@172.20.10.2
+```
+
+### Pi workspace layout
+### 1. Build librealsense from source
+
+The Pi requires building librealsense from source (no apt binary for arm64 matching the required version).
+
+```bash
+cd ~
+git clone https://github.com/IntelRealSense/librealsense.git
+cd librealsense
+git checkout v2.57.7
+sudo cp config/99-realsense-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_PYTHON_BINDINGS=OFF \
+  -DBUILD_EXAMPLES=OFF \
+  -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+  -DFORCE_RSUSB_BACKEND=ON
+make -j2
+sudo make install
+sudo ldconfig
+```
+
+> **Note:** `make -j2` keeps the Pi from overheating. Build takes ~45 minutes.
+
+### 2. Install system dependencies
+
+```bash
+sudo apt install -y \
+  libusb-1.0-0-dev libudev-dev libssl-dev \
+  libgtk-3-dev libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev \
+  python3-dev python3-pip cmake build-essential git pkg-config \
+  v4l-utils libv4l-dev
+```
+
+### 3. Build realsense-ros
+
+```bash
+cd ~/ur5e_hande_ws/src
+git clone https://github.com/IntelRealSense/realsense-ros.git -b ros2-master
+cd ~/ur5e_hande_ws
+source /opt/ros/humble/setup.bash
+sudo rosdep init    # only needed once
+rosdep update
+rosdep install -i --from-path src/realsense-ros --rosdistro humble -y
+colcon build --packages-select realsense2_camera_msgs
+colcon build --packages-select realsense2_camera realsense2_description
+```
+
+> Build order matters — `realsense2_camera_msgs` must be built first.
+
+### 4. Launch RealSense camera
+
+Always plug the D435i into a **USB 3.0 port** (blue) on the Pi. USB 2.x causes timeout errors and degraded performance.
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ur5e_hande_ws/install/setup.bash
+ros2 launch realsense2_camera rs_launch.py
+```
+
+With point cloud enabled:
+```bash
+ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true
+```
+
+Verify topics:
+```bash
+ros2 topic list
+# Expected:
+# /camera/camera/color/image_raw
+# /camera/camera/color/camera_info
+# /camera/camera/depth/image_rect_raw
+# /camera/camera/depth/camera_info
+# /camera/camera/depth/color/points  (if pointcloud.enable:=true)
+```
+
+Check framerate:
+```bash
+ros2 topic hz /camera/camera/color/image_raw   # ~30 Hz on USB 3.0
+```
+
+> The `Mipi device capability` permission errors in the log are harmless on Pi — they are MIPI interface probes that always fail on USB-connected devices.
+
+### 5. Launch Unity TCP bridge
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ur5e_hande_ws/install/setup.bash
+ros2 run ros_tcp_endpoint default_server_endpoint \
+  --ros-args -p ROS_IP:=172.20.10.2 -p ROS_TCP_PORT:=10000
+```
+
+Unity settings: **ROS IP = `172.20.10.2`**, **Port = `10000`**, **Protocol = ROS2**.
+
+### 6. ROS-TCP-Endpoint patch
+
+The default v0.7.0 does not support action message types. A patch was applied to `server.py` → `resolve_message_name()` to handle 3-part message names like `ur5e_moveit_actions/action/PlanToPose_Goal` and resolve action inner classes (`PlanToPose.Goal`, etc.).
+
+### Unity topics (Pi bridge)
+
+| Topic | Direction | Type |
+|---|---|---|
+| `plan_to_pose/goal` | Unity → Pi → Ubuntu | `ur5e_moveit_actions/action/PlanToPose_Goal` |
+| `plan_to_pose/result` | Ubuntu → Pi → Unity | `ur5e_moveit_actions/action/PlanToPose_Result` |
+| `execute_plan/goal` | Unity → Pi → Ubuntu | `ur5e_moveit_actions/action/ExecutePlan_Goal` |
+| `execute_plan/result` | Ubuntu → Pi → Unity | `ur5e_moveit_actions/action/ExecutePlan_Result` |
