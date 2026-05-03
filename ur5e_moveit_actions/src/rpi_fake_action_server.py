@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer
-from ur5e_moveit_actions_msgs.action import PlanToPose, ExecutePlan
+from ur5e_moveit_actions_pi.action import PlanToPose, ExecutePlan
 
 class FakeActionServer(Node):
     def __init__(self):

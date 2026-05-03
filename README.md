@@ -620,3 +620,62 @@ ros2 topic list
 - `rpi_fake_action_server.py` returns dummy success results for both `PlanToPose` and `ExecutePlan`
 - Replace with real `moveit_action_server` on Ubuntu PC for production
 - `ur5e_moveit_actions_msgs` must be used in Pi scripts instead of `ur5e_moveit_actions`
+
+---
+
+## 10. Raspberry Pi 4 — `ur5e_moveit_actions_pi` Package
+
+A lightweight Pi-only package containing action message definitions and Pi-specific scripts, without any MoveIt dependency.
+
+### Why this package exists
+
+The main `ur5e_moveit_actions` requires `moveit_ros_planning_interface` which cannot be installed on the Pi. `ur5e_moveit_actions_pi` contains only what the Pi needs.
+
+### Package contents
+ur5e_moveit_actions_pi/
+├── action/
+│   ├── PlanToPose.action
+│   └── ExecutePlan.action
+└── launch/
+└── rpi_bridge.launch.py
+
+Pi scripts are in `ur5e_moveit_actions/src/` prefixed with `rpi_`:
+
+| Script | Purpose |
+|---|---|
+| `rpi_fake_action_server.py` | Fake MoveIt action server for Pi testing |
+| `rpi_unity_action_bridge.py` | Bridges Unity topics to ROS 2 actions |
+
+### Launch everything with one command
+
+```bash
+ros2 launch ur5e_moveit_actions_pi rpi_bridge.launch.py
+```
+
+With custom IP:
+```bash
+ros2 launch ur5e_moveit_actions_pi rpi_bridge.launch.py ros_ip:=172.20.10.2
+```
+
+The default IP is auto-detected from the Pi's active network interface.
+
+### What the launch file starts
+
+| Node | Package | Purpose |
+|---|---|---|
+| `fake_action_server` | `ur5e_moveit_actions_pi` | Accepts plan/execute goals, returns dummy results |
+| `unity_action_bridge` | `ur5e_moveit_actions_pi` | Topic→action bridge for Unity |
+| `ros_tcp_endpoint` | `ros_tcp_endpoint` | Unity TCP connection on port 10000 |
+
+### Unity settings
+- ROS IP: `172.20.10.2`
+- Port: `10000`
+- Protocol: `ROS2`
+
+### Build
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select ur5e_moveit_actions_pi
+source install/setup.bash
+```

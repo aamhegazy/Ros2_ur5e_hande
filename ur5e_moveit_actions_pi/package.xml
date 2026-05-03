@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>ur5e_moveit_actions_msgs</name>
+  <name>ur5e_moveit_actions_pi</name>
   <version>0.1.0</version>
   <description>Action message definitions for Mantis Pi bridge</description>
   <maintainer email="aamhegazy@gmail.com">Ahmed</maintainer>
