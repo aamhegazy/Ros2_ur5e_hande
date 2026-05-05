@@ -1,4 +1,4 @@
-# UR5e + Robotiq Hand-E — ROS 2 Humble Workspace
+# [Raspberry Pi4] UR5e + Robotiq Hand-E — ROS 2 Humble Workspace 
 
 ROS 2 Humble workspace for controlling a **Universal Robots UR5e** arm with a **Robotiq Hand-E** gripper mounted on the UR tool flange. The gripper is driven over Modbus RTU through a socat tunnel, using the UR's built-in Tool Communication Interface — no USB-RS485 adapter needed. Includes MoveIt 2 configuration and a Unity TCP bridge for XR applications.
 
