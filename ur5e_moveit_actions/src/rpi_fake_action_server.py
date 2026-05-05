@@ -15,9 +15,9 @@ class FakeActionServer(Node):
 
     async def on_plan_goal_(self, goal_handle):
         self.get_logger().info(
-            f'Received plan goal: position=({goal_handle.request.target_pose.position.x:.2f}, '
-            f'{goal_handle.request.target_pose.position.y:.2f}, '
-            f'{goal_handle.request.target_pose.position.z:.2f})')
+            f'Received plan goal: position=({goal_handle.request.target_pose.pose.position.x:.2f}, '
+            f'{goal_handle.request.target_pose.pose.position.y:.2f}, '
+            f'{goal_handle.request.target_pose.pose.position.z:.2f})')
         goal_handle.succeed()
         result = PlanToPose.Result()
         result.success = True
