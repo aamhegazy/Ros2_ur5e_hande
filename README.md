@@ -1,4 +1,4 @@
-# Mantis — Raspberry Pi 4 Unity↔ROS 2 Bridge
+# Raspberry Pi 4 Unity↔ROS 2 Bridge
 
 This branch (`raspberry-pi`) turns a **Raspberry Pi 4** into a lightweight ROS 2 bridge for the Mantis XR teleoperation project. The Pi exposes:
 
