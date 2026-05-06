@@ -1,13 +1,40 @@
+<<<<<<< HEAD
 # Raspberry Pi 4 Unity↔ROS 2 Bridge
+=======
+#Raspberry Pi 4 Unity↔ROS 2 Bridge
+>>>>>>> 0c37081 (docs: clarify Pi role — transport/test layer + RealSense, not a planner)
 
-This branch (`raspberry-pi`) turns a **Raspberry Pi 4** into a lightweight ROS 2 bridge for the Mantis XR teleoperation project. The Pi exposes:
+This branch (`raspberry-pi`) sets up a **Raspberry Pi 4** as a development and testing utility for the Mantis XR teleoperation project. It serves two purposes:
 
-1. A **Unity ↔ ROS 2 TCP bridge** — Unity (Quest/Windows) connects via `ROS-TCP-Endpoint` and exchanges action goals/results for `PlanToPose` and `ExecutePlan`.
-2. A **RealSense D435i ROS 2 publisher** — color and depth streams published as `sensor_msgs/Image` topics, viewable in any browser via `web_video_server`.
+1. **A mock target for Unity↔ROS 2 development.** A fake action server runs on the Pi and answers `PlanToPose` / `ExecutePlan` goals with dummy success results. This validates the full Unity → TCP → action-message → result pipeline **without** needing the Ubuntu PC, MoveIt, or the physical UR5e to be running. It does **not** plan trajectories or move any robot — it only proves transport works.
+2. **A RealSense D435i camera node.** Color and depth streams are published as `sensor_msgs/Image` and viewable in any browser via `web_video_server`. This is independent of the action bridge and is intended to remain useful during real teleoperation.
 
-The Pi runs a **fake action server** that mocks the MoveIt planner. This makes it possible to develop and test the full Unity XR → ROS 2 pipeline **without the Ubuntu PC, without MoveIt, and without the physical UR5e**.
+> The Pi is a transport/test layer, **not** a planner. Once MoveIt is running on the Ubuntu PC, Unity should talk directly to the PC's `ros_tcp_endpoint` for real planning and execution. The Pi can stay in the loop only as the RealSense source.
 
-> For real hardware control (UR5e + Hand-E + MoveIt), use the `main` branch on the Ubuntu PC.
+## Roadmap
+
+- ✅ Unity ↔ Pi action pipeline (Plan + Execute round-trip with fake server)
+- ✅ RealSense D435i streaming via `pyrealsense2` workaround
+- ⏳ Connect Unity directly to Ubuntu PC's MoveIt action server for real planning + URDF animation
+- ⏳ Real UR5e + Hand-E execution via Ubuntu PC
+
+---
+
+## 1. What's on the Pi
+
+| Package | Role |
+|---|---|
+| `ur5e_moveit_actions_pi` | Pi-only action message definitions (`PlanToPose`, `ExecutePlan`) + launch file + Pi nodes. No MoveIt dependency. |
+| `ROS-TCP-Endpoint` (patched) | Unity TCP bridge on port 10000. |
+| `realsense2_camera` | (Optional) Stock RealSense ROS 2 wrapper — known unstable on Pi 4 + D435i. |
+
+### Pi-specific scripts (in `ur5e_moveit_actions/src/`, prefixed `rpi_`)
+
+| Script | Purpose |
+|---|---|
+| `rpi_fake_action_server.py` | Mocks MoveIt — accepts `PlanToPose` / `ExecutePlan` goals, returns dummy success. Used for transport-layer validation only; does not plan or execute anything. |
+| `rpi_unity_action_bridge.py` | Bridges Unity topic publishes (`plan_to_pose/goal`, `execute_plan/goal`) to ROS 2 action calls and forwards results back. |
+| `rpi_realsense_publisher.py` | Custom RealSense publisher using `pyrealsense2` directly (workaround for Pi UVC issues). |
 
 ---
 
