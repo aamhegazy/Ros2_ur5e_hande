@@ -1,244 +1,194 @@
-# UR5e + Robotiq Hand-E — ROS 2 Humble Workspace
+# UR5e + Robotiq Hand-E — ROS 2 Workspace
 
-ROS 2 Humble workspace for controlling a **Universal Robots UR5e** arm with a **Robotiq Hand-E** gripper mounted on the UR tool flange. The gripper is driven over Modbus RTU through a socat tunnel, using the UR's built-in Tool Communication Interface — no USB-RS485 adapter needed. Includes MoveIt 2 configuration and a Unity TCP bridge for XR applications.
-
-```
-[ROS 2 on PC]  ──TCP/IP──►  [UR Controller]  ──RS485 tool I/O──►  [Hand-E]
-                              └ External Control URCap forwards control
-                              └ Tool Comm forwards socat tunnel to RS485
-```
-
-## Contents
-
-| Package | Purpose | Source |
-|---|---|---|
-| `moveit_config` | MoveIt 2 config, launch files, URDF top-level, ros2_control YAML | local |
-| `ur5e_hande_description` | URDF/xacro + meshes for UR5e + Hand-E | local |
-| `robotiq_hande_driver` | ros2_control hardware interface for Hand-E (socat + Modbus RTU) | [AGH-CEAI/robotiq_hande_driver](https://github.com/AGH-CEAI/robotiq_hande_driver) |
-| `ROS-TCP-Endpoint` | Unity ↔ ROS 2 bridge for XR teleop | [Unity-Technologies/ROS-TCP-Endpoint](https://github.com/Unity-Technologies/ROS-TCP-Endpoint) |
-
-## Requirements
-
-- Ubuntu 22.04 LTS
-- ROS 2 Humble Hawksbill (desktop install)
-- UR5e with the **External Control URCap** installed on the teach pendant
-- Robotiq Hand-E wired to the UR tool flange (24V + RS485 on tool I/O pins)
-- Ethernet connection between PC and robot
+ROS 2 Humble workspace for controlling a **Universal Robots UR5e** arm with a **Robotiq Hand-E** gripper attached via the UR tool I/O (socat-tunneled Modbus RTU over the UR controller). Includes MoveIt 2 configuration, custom action servers, and a Unity TCP bridge for XR teleoperation.
 
 ---
 
-## 1. Install
+## What's in here
 
-### System dependencies
+| Package | Purpose | Source |
+|---|---|---|
+| `moveit_config` | MoveIt 2 configuration, launch files, SRDF/URDF assembly, ros2_control YAML | local |
+| `ur5e_hande_description` | URDF/xacro + meshes for UR5e + Hand-E combined | local |
+| `ur5e_moveit_actions` | Custom ROS2 action servers: `plan_to_pose` and `execute_plan` + Unity bridge | local |
+| `robotiq_hande_driver` | ros2_control hardware interface for Hand-E via socat + Modbus RTU | [AGH-CEAI/robotiq_hande_driver](https://github.com/AGH-CEAI/robotiq_hande_driver) |
+| `ROS-TCP-Endpoint` | Unity ↔ ROS 2 bridge (patched for action message support) | [Unity-Technologies/ROS-TCP-Endpoint](https://github.com/Unity-Technologies/ROS-TCP-Endpoint) |
+
+---
+
+## Prerequisites
+
+- Ubuntu 22.04 LTS
+- ROS 2 Humble Hawksbill (desktop install)
+- UR5e robot with **External Control URCap** installed on the teach pendant
+- Robotiq Hand-E gripper wired to the UR tool flange (RS485 via tool I/O pins)
+- A router/switch connecting the PC and the robot
+
+---
+
+## Install
+
+### 1. System dependencies
 
 ```bash
 sudo apt update
-sudo apt install \
+sudo apt install -y \
   ros-humble-ur \
   ros-humble-ur-robot-driver \
   ros-humble-ur-description \
   ros-humble-ur-moveit-config \
-  ros-humble-ur-calibration \
   ros-humble-moveit \
   ros-humble-moveit-configs-utils \
   ros-humble-controller-manager \
   ros-humble-joint-trajectory-controller \
   ros-humble-position-controllers \
   ros-humble-joint-state-broadcaster \
+  ros-humble-ros2-control-test-assets \
   libmodbus-dev \
   libserial-dev \
   socat
 ```
 
-`libmodbus-dev` is **required** for the Hand-E driver build. `socat` is required at runtime for the tool-communication tunnel.
+> `libmodbus-dev` is **mandatory** for `robotiq_hande_driver` to build.
+> `ros-humble-ros2-control-test-assets` is required by `robotiq_hande_driver`.
+> `socat` is required at runtime for the tool-communication tunnel.
 
-### Create the workspace
+### 2. Clone the workspace
 
 ```bash
 mkdir -p ~/ur5e_hande_ws/src
 cd ~/ur5e_hande_ws/src
-# Unzip this archive here so you end up with:
-#   ~/ur5e_hande_ws/src/moveit_config
-#   ~/ur5e_hande_ws/src/ur5e_hande_description
-#   ~/ur5e_hande_ws/src/robotiq_hande_driver
-#   ~/ur5e_hande_ws/src/ROS-TCP-Endpoint
+git clone https://github.com/aamhegazy/Ros2_ur5e_hande.git .
 ```
 
-### Resolve ROS dependencies
+### 3. Clone submodule dependencies
+
+```bash
+cd ~/ur5e_hande_ws/src
+git clone -b humble-devel https://github.com/AGH-CEAI/robotiq_hande_driver.git robotiq_hande_driver
+git clone -b main-ros2 https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git ROS-TCP-Endpoint
+```
+
+### 4. Install ROS dependencies
 
 ```bash
 cd ~/ur5e_hande_ws
 rosdep install --from-paths src --ignore-src -r -y
 ```
 
-### Build
+### 5. Build
 
 ```bash
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-Consider adding the source line to `~/.bashrc`:
-
+Add to `~/.bashrc`:
 ```bash
 echo "source ~/ur5e_hande_ws/install/setup.bash" >> ~/.bashrc
 ```
 
 ---
 
-## 2. Network setup
+## Network setup
 
-This workspace defaults to:
+Default IPs used in this workspace:
 
 | Device | IP |
 |---|---|
 | Robot | `192.168.0.10` |
-| PC | `192.168.0.11` |
+| Ubuntu PC | `192.168.0.52` |
+| Unity/VR PC | `192.168.0.27` |
+| Subnet | `/24` on `192.168.0.0` |
 
-### On the pendant
+### On the robot (teach pendant)
 
 *Settings → System → Network → Static Address*
 - IP: `192.168.0.10`
-- Subnet mask: `255.255.255.0`
+- Mask: `255.255.255.0`
 - Gateway: `192.168.0.1`
 
-### On the PC
-
-Find your wired interface:
-
-```bash
-ip -br link
-```
-
-Replace `<iface>` with the name you found (e.g. `enp3s0`, `enx6c1ff71e5bcf`):
+### On the Ubuntu PC
 
 ```bash
 nmcli con add type ethernet ifname <iface> con-name ur-lan \
   ipv4.method manual \
-  ipv4.addresses 192.168.0.11/24 \
-  ipv4.dns 192.168.0.1
+  ipv4.addresses 192.168.0.52/24
 nmcli con up ur-lan
 ```
-
-No `ipv4.gateway` — internet stays on Wi-Fi.
 
 ### Verify
 
 ```bash
-ping -c 3 192.168.0.10    # PC → robot
+ping -c 3 192.168.0.10
 ```
 
-From the pendant, also ping back to `192.168.0.11`. Both directions must succeed.
+---
 
-### Using different IPs
+## Pendant setup
 
-Pass them at launch time:
+### External Control URCap
+
+1. Copy the External Control `.urcap` to USB and plug into pendant
+2. *Settings → System → URCaps → +* → select the file → restart
+3. Create a program: *Program → URCaps → External Control*
+4. Set Host IP: `192.168.0.52`, Host port: `50002`
+5. Save the program
+
+### Tool Communication Interface
+
+Required for Hand-E via socat:
+
+*Installation → Tool Communication Interface*:
+- Enabled: **On**
+- Baud: `115200`, Parity: `None`, Stop bits: `1`
+- Controlled by: **User**
+
+### Every time you launch ROS
+
+1. Switch pendant to **Remote Control** mode
+2. Load the **External Control** program
+3. Start ROS first (see below), then press **▶ Play** on the pendant
+4. You should see in the terminal:
+   ```
+   Robot connected to reverse interface. Ready to receive control commands.
+   ```
+5. Speed slider → **100%** (at 0% nothing moves)
+
+> **If you relaunch ROS**, stop and re-play the URCap program on the pendant.
+
+---
+
+## Launch
+
+### Real robot + Unity XR (all-in-one)
+
+```bash
+ros2 launch moveit_config spawn_ur5e_unity.launch.py \
+  ur_ip:=192.168.0.10 \
+  reverse_ip:=192.168.0.52 \
+  ros_ip:=192.168.0.52 \
+  ros_tcp_port:=10000
+```
+
+This starts:
+- `ur_ros2_control_node` (UR arm + Hand-E hardware)
+- `joint_state_broadcaster`
+- `scaled_joint_trajectory_controller`
+- `gripper_controller`
+- `move_group` (MoveIt 2)
+- RViz 2
+- `moveit_action_server` (`/plan_to_pose`, `/execute_plan`)
+- `unity_action_bridge`
+- `ros_tcp_endpoint` (Unity TCP bridge on port 10000)
+
+### Real robot only (no TCP bridge)
 
 ```bash
 ros2 launch moveit_config spawn_ur5e_hande.launch.py \
-  ur_ip:=10.0.0.10 reverse_ip:=10.0.0.11
+  ur_ip:=192.168.0.10 \
+  reverse_ip:=192.168.0.52
 ```
-
----
-
-## 3. Pendant setup
-
-Do this **once** per robot.
-
-### Install the External Control URCap
-
-1. Copy the `.urcap` file to a USB stick, plug into the pendant.
-2. *Settings → System → URCaps → +* → select the file → restart.
-3. Create a program: *Program → URCaps → External Control*.
-4. Set **Host IP = `192.168.0.11`** (your PC), **Host port = `50002`**.
-5. Save the program.
-
-### Enable Tool Communication Interface
-
-This is required for the Hand-E — the gripper is driven over RS485 through the tool I/O.
-
-*Installation → URCaps → Tool Communication Interface* (or *Tool I/O* in some PolyScope versions):
-
-- **Enabled**: On
-- **Controlled by**: User
-- Baud: `115200`
-- Parity: `None`
-- Stop bits: `1`
-- RX idle chars: `1.5`
-- TX idle chars: `3.5`
-
-Save the installation.
-
----
-
-## 4. Kinematics calibration
-
-Each UR5e ships with factory-calibrated DH offsets unique to that specific arm. Without them, TCP positions can be off by up to ~1 cm depending on joint angle — critical for Cartesian teleop or pick-and-place.
-
-Extract the calibration from your robot:
-
-```bash
-cd ~/ur5e_hande_ws
-ros2 launch ur_calibration calibration_correction.launch.py \
-  robot_ip:=192.168.0.10 \
-  target_filename:="$(pwd)/src/moveit_config/config/calibration/ur5e_calibration.yaml"
-```
-
-Then rebuild:
-
-```bash
-colcon build --symlink-install --packages-select moveit_config
-source install/setup.bash
-```
-
-The launch file automatically uses this file. If it's missing, the launch falls back to UR's generic defaults and prints a warning.
-
----
-
-## 5. Launch
-
-### Every-time checklist
-
-1. **PC is on the right subnet** (`192.168.0.11/24`). Check with `ip addr show`.
-2. **Pendant in Remote Control mode** — top-right icon on PolyScope must show Remote, not Local.
-3. **Speed slider at 100%** — top of the pendant screen.
-4. **No E-stop pressed**.
-5. **Load the External Control program** on the pendant (but don't press Play yet).
-
-### Start ROS
-
-```bash
-ros2 launch moveit_config spawn_ur5e_hande.launch.py
-```
-
-This brings up:
-
-- UR hardware interface + Hand-E hardware interface
-- socat tunnel (`/tmp/ttyUR` ↔ `192.168.0.10:54321`)
-- Controllers: joint state broadcaster, `scaled_joint_trajectory_controller` (arm), `gripper_controller` (Hand-E)
-- MoveIt MoveGroup
-- RViz with MotionPlanning panel
-
-### Press Play on the pendant
-
-Once the driver prints:
-
-```
-RobotiqHandeHardwareInterface: Connected
-Waiting on fulfillment of program request
-```
-
-Press **▶ Play** on the pendant. The driver should then print:
-
-```
-Robot requested program
-Sent program to robot
-Robot connected to reverse interface. Ready to receive control commands.
-```
-
-**Only after this message** can the arm actually move. Before it, trajectory goals will "succeed" with no physical motion.
-
-If you kill ROS and relaunch, you must stop the program on the pendant and press Play again to re-establish the reverse interface.
 
 ### Fake hardware (no robot needed)
 
@@ -246,152 +196,147 @@ If you kill ROS and relaunch, you must stop the program on the pendant and press
 ros2 launch moveit_config spawn_fake_ur5e_hande.launch.py
 ```
 
-Uses mock components for both arm and gripper. Good for testing launch files, URDF, and MoveIt config without the physical robot.
-
-### Unity XR bridge
-
-Start the TCP bridge in a separate terminal after the main launch is running:
-
-```bash
-ros2 run ros_tcp_endpoint default_server_endpoint \
-  --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000
-```
-
-Configure the Unity side to connect to your PC's IP on port `10000`.
+Uses `mock_components/GenericSystem` for both arm and gripper.
 
 ---
 
-## 6. Controlling the robot
+## Custom Action Servers
 
-### MoveIt via RViz
+Two action servers are provided in `ur5e_moveit_actions`:
 
-In the MotionPlanning panel's Planning tab:
-- Drag the interactive marker on the end-effector.
-- Click **Plan** to preview, then **Execute**.
-- Or **Plan & Execute** to do both.
+### `/plan_to_pose`
 
-Switch between planning groups `ur5e` (arm) and `gripper` using the Planning Group dropdown.
-
-### Direct trajectory commands (no MoveIt)
+Plans a trajectory to a target pose using MoveIt. Returns waypoints and a `plan_id`.
 
 ```bash
-ros2 action send_goal /scaled_joint_trajectory_controller/follow_joint_trajectory \
-  control_msgs/action/FollowJointTrajectory \
-  "{trajectory: {
-     joint_names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint],
-     points: [{positions: [0, -1.57, 0, -1.57, 0, 0], time_from_start: {sec: 5}}]}}"
+ros2 action send_goal /plan_to_pose ur5e_moveit_actions/action/PlanToPose \
+  "{target_pose: {header: {frame_id: 'base_link'}, pose: {position: {x: 0.4, y: 0.2, z: 0.3}, orientation: {x: 0, y: 0, z: 0, w: 1}}}, planning_time: 10.0, velocity_scaling: 0.1, acceleration_scaling: 0.1, planning_id: 'RRTConnect'}"
 ```
 
-All angles in radians. 1.57 rad ≈ 90°.
+### `/execute_plan`
 
-### Gripper
+Executes a previously planned trajectory using the `plan_id` returned by `/plan_to_pose`.
 
 ```bash
-# Close
-ros2 action send_goal /gripper_controller/gripper_cmd \
-  control_msgs/action/GripperCommand \
-  "{command: {position: 0.0, max_effort: 10.0}}"
-
-# Open
-ros2 action send_goal /gripper_controller/gripper_cmd \
-  control_msgs/action/GripperCommand \
-  "{command: {position: 0.025, max_effort: 10.0}}"
+ros2 action send_goal /execute_plan ur5e_moveit_actions/action/ExecutePlan \
+  "{plan_id: 'YOUR_PLAN_ID_HERE'}"
 ```
 
-Position range: `0.0` m (fully closed) to `0.025` m (fully open). Max effort in Newtons.
-
-### Inspect current state
-
-```bash
-ros2 topic echo /joint_states           # all joint positions/velocities
-ros2 control list_controllers           # which controllers are active
-ros2 topic echo /tcp_pose_broadcaster/pose  # current TCP pose
-```
+> Use `velocity_scaling: 0.1` and `acceleration_scaling: 0.1` for safety on first runs.
 
 ---
 
-## 7. Troubleshooting
+## Unity XR Setup
 
-### "Goal reached, success!" but the arm doesn't move
+On the Unity side (Windows PC at `192.168.0.27`):
+- ROS IP: `192.168.0.52`
+- Port: `10000`
+- Protocol: ROS2
 
-The External Control URCap isn't running on the pendant. The ROS controller accepts the goal, runs its internal trajectory timer, and reports success — but the commands went into a black hole because the reverse interface isn't connected.
+The `ROS-TCP-Endpoint` in this workspace has been patched to support 3-part action message names (e.g. `ur5e_moveit_actions/action/PlanToPose_Goal`).
 
-**Check**: did the driver print *"Robot connected to reverse interface. Ready to receive control commands"* when you launched? If not, press Play on the pendant.
+---
 
-### `Failed to write registers (Modbus failure)` on Hand-E activation
-
-One of:
-- Tool Communication Interface is **not enabled** on the pendant installation.
-- Baud/parity mismatch between driver and pendant. Must be `115200, N, 8, 1` on both sides.
-- Hand-E not powered (no 24V on tool flange).
-- Wrong IP reaching socat. Check this log line: `Creating a virtual serial port from ip:X.X.X.X port:54321 with socat`. The IP must match your robot.
-
-### `package 'robotiq_hande_description' not found`
-
-Old reference left over from an earlier version. The current xacro points at `ur5e_hande_description/urdf/hand_e.ros2_control.xacro`. Make sure your `moveit_config/config/ur5e_hande.urdf.xacro` matches what's in this repo.
-
-### `A required package was not found ... pkg_check_modules`
-
-Missing `libmodbus-dev` — the Hand-E driver needs it:
+## Kinematics calibration (recommended)
 
 ```bash
-sudo apt install libmodbus-dev libserial-dev
-cd ~/ur5e_hande_ws
-rm -rf build/robotiq_hande_driver install/robotiq_hande_driver
-colcon build --symlink-install
+ros2 launch ur_calibration calibration_correction.launch.py \
+  robot_ip:=192.168.0.10 \
+  target_filename:="$(pwd)/src/moveit_config/config/calibration/ur5e_calibration.yaml"
 ```
 
-### Arm trajectory rejected: "start position differs from current"
+Without calibration, TCP positions can be off by ~1 cm.
 
-Current pose is too far from the trajectory's first waypoint. Options:
-- Use Freedrive on the pendant to move closer.
-- Send a trajectory whose first waypoint equals the current state (check `/joint_states`).
-- Use MoveIt instead of raw trajectories — MoveIt handles start-state automatically.
+---
 
-### `/tmp/ttyUR` permission denied
+## Troubleshooting
+
+### Robot doesn't move after plan executes
+
+External Control URCap is not playing. Check terminal for `Robot connected to reverse interface`. If absent, press Play on the pendant.
+
+### `Failed to write registers (Modbus failure)` on Hand-E
+
+- Tool Communication Interface disabled on pendant
+- Wrong baud/parity (must be `115200, N, 8, 1`)
+- Hand-E not receiving 24V on the tool flange
+- Wrong robot IP in socat — check `Creating a virtual serial port from ip:X.X.X.X` log line
+
+### `robotiq_hande_driver` not found by colcon
+
+The `src/robotiq_hande_driver` folder is empty. Clone it:
+```bash
+cd ~/ur5e_hande_ws/src
+rm -rf robotiq_hande_driver
+git clone -b humble-devel https://github.com/AGH-CEAI/robotiq_hande_driver.git robotiq_hande_driver
+```
+
+### `ros2_control_test_assets` not found during build
 
 ```bash
-sudo usermod -aG dialout $USER
-# then log out and back in
+sudo apt install -y ros-humble-ros2-control-test-assets
 ```
 
-### Static IP keeps getting overridden by DHCP
+### `Neither output recipe file nor output recipe have been defined`
+
+The recipe file paths in `ur5e_hande_description/urdf/ur5e_hande.urdf.xacro` are empty. Verify they point to:
+```
+/opt/ros/humble/share/ur_robot_driver/resources/ros_control.urscript
+/opt/ros/humble/share/ur_robot_driver/resources/rtde_output_recipe.txt
+/opt/ros/humble/share/ur_robot_driver/resources/rtde_input_recipe.txt
+```
+
+### Controllers don't activate
 
 ```bash
-nmcli con show
+ros2 control list_controllers
+ros2 control set_controller_state scaled_joint_trajectory_controller active
 ```
 
-Delete any other active connection on the same interface, or raise `connection.autoconnect-priority` on the `ur-lan` profile.
+### Unity connection refused
+
+Verify TCP endpoint is running and bound to the correct IP:
+```
+[UnityEndpoint]: Starting server on 192.168.0.52:10000
+```
+Check firewall: `sudo ufw allow 10000/tcp`
 
 ---
 
 ## Directory layout
 
 ```
-src/
-├── README.md                        # this file
-├── .gitignore
-├── moveit_config/                   # MoveIt config + launch files (edit here for integration)
-│   ├── config/
-│   │   ├── calibration/
-│   │   │   └── ur5e_calibration.yaml     # generated per-robot (see §4)
-│   │   ├── ur5e_hande.urdf.xacro         # top-level URDF assembly
-│   │   ├── ur5e_hande.srdf
-│   │   ├── ros2_controllers.yaml
-│   │   ├── moveit_controllers.yaml
-│   │   └── ...
-│   └── launch/
-│       ├── spawn_ur5e_hande.launch.py       # real hardware
-│       └── spawn_fake_ur5e_hande.launch.py  # mock hardware
-├── ur5e_hande_description/          # URDF + meshes for UR5e + Hand-E
-├── robotiq_hande_driver/            # Hand-E ros2_control plugin (upstream)
-└── ROS-TCP-Endpoint/                # Unity bridge (upstream)
+ur5e_hande_ws/
+└── src/
+    ├── moveit_config/
+    │   ├── config/
+    │   │   ├── ur5e_hande.urdf.xacro
+    │   │   ├── ur5e_hande.srdf
+    │   │   ├── ros2_controllers.yaml
+    │   │   ├── moveit_controllers.yaml
+    │   │   ├── kinematics.yaml
+    │   │   └── initial_positions.yaml
+    │   └── launch/
+    │       ├── spawn_ur5e_unity.launch.py       ← real robot + Unity (all-in-one)
+    │       ├── spawn_ur5e_hande.launch.py        ← real robot only
+    │       └── spawn_fake_ur5e_hande.launch.py   ← fake hardware
+    ├── ur5e_hande_description/
+    │   └── urdf/
+    │       ├── ur5e_hande.urdf.xacro
+    │       └── hand_e.ros2_control.xacro
+    ├── ur5e_moveit_actions/                      ← custom action servers
+    ├── robotiq_hande_driver/                     ← Hand-E hardware interface
+    └── ROS-TCP-Endpoint/                         ← Unity bridge (patched)
 ```
+
+---
+
+## License
+
+Each package retains its original license. See individual `LICENSE` files.
 
 ## Credits
 
-- `robotiq_hande_driver` — AGH University of Krakow Centre of Excellence in AI
+- `robotiq_hande_driver` — AGH Centre of Excellence in Artificial Intelligence (AGH-CEAI)
 - `ROS-TCP-Endpoint` — Unity Technologies
 - Universal Robots ROS 2 Driver — Universal Robots A/S & PickNik Robotics
-
-Each package retains its original license. See individual `LICENSE` files.

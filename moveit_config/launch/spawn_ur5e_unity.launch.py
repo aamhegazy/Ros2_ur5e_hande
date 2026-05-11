@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -10,53 +10,26 @@ import os
 
 def generate_launch_description():
 
-    # --- EAGERLY RESOLVED PATHS (must be plain strings for xacro mappings) ---
     ur_driver_share = get_package_share_directory("ur_robot_driver")
-    script_filename         = os.path.join(ur_driver_share, "resources", "ros_control.urscript")
-    output_recipe_filename  = os.path.join(ur_driver_share, "resources", "rtde_output_recipe.txt")
-    input_recipe_filename   = os.path.join(ur_driver_share, "resources", "rtde_input_recipe.txt")
+    script_filename        = os.path.join(ur_driver_share, "resources", "ros_control.urscript")
+    output_recipe_filename = os.path.join(ur_driver_share, "resources", "rtde_output_recipe.txt")
+    input_recipe_filename  = os.path.join(ur_driver_share, "resources", "rtde_input_recipe.txt")
 
     moveit_config_share = get_package_share_directory("moveit_config")
-    initial_positions_file  = os.path.join(moveit_config_share, "config", "initial_positions.yaml")
+    initial_positions_file = os.path.join(moveit_config_share, "config", "initial_positions.yaml")
 
-    # Quick sanity check — will raise at launch time if files are missing
     for f in [script_filename, output_recipe_filename, input_recipe_filename, initial_positions_file]:
         if not os.path.isfile(f):
             raise FileNotFoundError(f"Required file not found: {f}")
 
     # --- ARGUMENTS ---
-    declared_args = []
-
-    declared_args.append(DeclareLaunchArgument(
-        "ur_ip",
-        default_value="192.168.1.10",
-        description="IP of the UR Robot (also used for Gripper socat)"
-    ))
-
-    declared_args.append(DeclareLaunchArgument(
-        "reverse_ip",
-        default_value="192.168.1.11",
-        description="IP of this PC running ROS (check with: hostname -I)"
-    ))
-
-    declared_args.append(DeclareLaunchArgument(
-        "use_fake_hardware",
-        default_value="false",
-        description="Set true to use mock hardware (no real robot needed)"
-    ))
-
-    # ── Unity TCP args ──────────────────────────────────────────────────────
-    declared_args.append(DeclareLaunchArgument(
-        "ros_ip",
-        default_value="0.0.0.0",
-        description="IP for the Unity TCP endpoint to bind on (0.0.0.0 = all interfaces)"
-    ))
-
-    declared_args.append(DeclareLaunchArgument(
-        "ros_tcp_port",
-        default_value="10000",
-        description="Port Unity connects to"
-    ))
+    declared_args = [
+        DeclareLaunchArgument("ur_ip",             default_value="192.168.0.10"),
+        DeclareLaunchArgument("reverse_ip",        default_value="192.168.0.52"),
+        DeclareLaunchArgument("use_fake_hardware", default_value="false"),
+        DeclareLaunchArgument("ros_ip",            default_value="192.168.0.52"),
+        DeclareLaunchArgument("ros_tcp_port",      default_value="10000"),
+    ]
 
     ur_ip             = LaunchConfiguration("ur_ip")
     reverse_ip        = LaunchConfiguration("reverse_ip")
@@ -64,33 +37,40 @@ def generate_launch_description():
     ros_ip            = LaunchConfiguration("ros_ip")
     ros_tcp_port      = LaunchConfiguration("ros_tcp_port")
 
-    # --- 1. LOAD MOVEIT CONFIG ---
+    # --- MOVEIT CONFIG ---
     moveit_config = (
         MoveItConfigsBuilder("moveit_config", package_name="moveit_config")
         .robot_description(
             file_path="config/ur5e_hande.urdf.xacro",
             mappings={
-                "name": "ur5e",
-                "robot_ip":         ur_ip,
-                "reverse_ip":       reverse_ip,
-                "socat_ip_address": ur_ip,
-                "use_fake_hardware": use_fake_hardware,
-                "sim_gazebo":        "false",
-                "sim_ignition":      "false",
-                "script_filename":        script_filename,
-                "output_recipe_filename": output_recipe_filename,
-                "input_recipe_filename":  input_recipe_filename,
-                "initial_positions_file": initial_positions_file,
-                "create_socat_tty": "true",
-                "socat_port":       "54321",
-                "tty_port":         "/tmp/ttyUR",
+                "name":                    "ur5e",
+                "robot_ip":                ur_ip,
+                "reverse_ip":              reverse_ip,
+                "socat_ip_address":        ur_ip,
+                "use_fake_hardware":       use_fake_hardware,
+                "sim_gazebo":              "false",
+                "sim_ignition":            "false",
+                "script_filename":         script_filename,
+                "output_recipe_filename":  output_recipe_filename,
+                "input_recipe_filename":   input_recipe_filename,
+                "initial_positions_file":  initial_positions_file,
+                "create_socat_tty":        "true",
+                "socat_port":              "54321",
+                "tty_port":                "/tmp/ttyUR",
             },
         )
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .to_moveit_configs()
     )
 
-    # --- 2. THE DRIVER NODE (ros2_control + UR hardware) ---
+    # --- NODES ---
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="both",
+        parameters=[moveit_config.robot_description],
+    )
+
     control_node = Node(
         package="ur_robot_driver",
         executable="ur_ros2_control_node",
@@ -107,7 +87,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    # --- 3. MOVE GROUP ---
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
@@ -121,7 +100,6 @@ def generate_launch_description():
         ],
     )
 
-    # --- 4. RVIZ ---
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -137,16 +115,6 @@ def generate_launch_description():
         arguments=["-d", PathJoinSubstitution([FindPackageShare("moveit_config"), "config", "moveit.rviz"])],
     )
 
-    # --- 5. ROBOT STATE PUBLISHER ---
-    robot_state_publisher_node = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        name="robot_state_publisher",
-        output="both",
-        parameters=[moveit_config.robot_description],
-    )
-
-    # --- 6. SPAWN CONTROLLERS (in order) ---
     spawn_jsb = Node(
         package="controller_manager",
         executable="spawner",
@@ -165,7 +133,6 @@ def generate_launch_description():
         arguments=["gripper_controller", "-c", "/controller_manager"],
     )
 
-    # --- 7. UNITY TCP ENDPOINT -----------------------------------------------
     unity_tcp_endpoint = Node(
         package="ros_tcp_endpoint",
         executable="default_server_endpoint",
@@ -177,16 +144,35 @@ def generate_launch_description():
         ],
     )
 
-    # --- LAUNCH ORDER ---
+    # Action server + bridge — delayed to wait for move_group
+    action_server = TimerAction(
+        period=10.0,
+        actions=[
+            Node(
+                package="ur5e_moveit_actions",
+                executable="moveit_action_server",
+                name="moveit_action_server",
+                output="screen",
+                parameters=[moveit_config.to_dict()],
+            ),
+            Node(
+                package="ur5e_moveit_actions",
+                executable="unity_action_bridge",
+                name="unity_action_bridge",
+                output="screen",
+            ),
+        ]
+    )
+
     return LaunchDescription(declared_args + [
-        robot_state_publisher_node,
+        robot_state_publisher,
         control_node,
-        unity_tcp_endpoint,          # ← starts alongside the robot driver
+        unity_tcp_endpoint,
         spawn_jsb,
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn_jsb,
-                on_exit=[spawn_arm, spawn_gripper, move_group_node, rviz_node],
+                on_exit=[spawn_arm, spawn_gripper, move_group_node, rviz_node, action_server],
             )
         ),
     ])
