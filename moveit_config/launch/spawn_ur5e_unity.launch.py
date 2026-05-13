@@ -43,20 +43,20 @@ def generate_launch_description():
         .robot_description(
             file_path="config/ur5e_hande.urdf.xacro",
             mappings={
-                "name":                    "ur5e",
-                "robot_ip":                ur_ip,
-                "reverse_ip":              reverse_ip,
-                "socat_ip_address":        ur_ip,
-                "use_fake_hardware":       use_fake_hardware,
-                "sim_gazebo":              "false",
-                "sim_ignition":            "false",
-                "script_filename":         script_filename,
-                "output_recipe_filename":  output_recipe_filename,
-                "input_recipe_filename":   input_recipe_filename,
-                "initial_positions_file":  initial_positions_file,
-                "create_socat_tty":        "true",
-                "socat_port":              "54321",
-                "tty_port":                "/tmp/ttyUR",
+                "name":                   "ur5e",
+                "robot_ip":               ur_ip,
+                "reverse_ip":             reverse_ip,
+                "socat_ip_address":       ur_ip,
+                "use_fake_hardware":      use_fake_hardware,
+                "sim_gazebo":             "false",
+                "sim_ignition":           "false",
+                "script_filename":        script_filename,
+                "output_recipe_filename": output_recipe_filename,
+                "input_recipe_filename":  input_recipe_filename,
+                "initial_positions_file": initial_positions_file,
+                "create_socat_tty":       "true",
+                "socat_port":             "54321",
+                "tty_port":               "/tmp/ttyUR",
             },
         )
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
@@ -144,7 +144,6 @@ def generate_launch_description():
         ],
     )
 
-    # Action server + bridge — delayed to wait for move_group
     action_server = TimerAction(
         period=10.0,
         actions=[
@@ -153,7 +152,14 @@ def generate_launch_description():
                 executable="moveit_action_server",
                 name="moveit_action_server",
                 output="screen",
-                parameters=[moveit_config.to_dict()],
+                parameters=[
+                    moveit_config.to_dict(),
+                    {"planning_group": "ur5e"},
+                    {"base_frame":       "base_link"},
+                    {"tcp_link":         "tool0"},
+                    {"plan_ttl_seconds": 30.0},
+                    {"waypoint_stride":  1},
+                ],
             ),
             Node(
                 package="ur5e_moveit_actions",
